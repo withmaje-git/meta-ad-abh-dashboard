@@ -392,6 +392,24 @@ def render_trend():
                "주황 선=그날 ROAS, 보라 점선=그날 기준 최근 7일 ROAS(오른쪽 축). "
                "보라 숫자=마지막 날의 최근 7일 ROAS. 회색 점선=ROAS 1.0(본전).")
 
+    # ── 계정 전체(활성 캠페인 합산) — 캠페인별 그래프보다 위에 먼저 ──
+    # 캠페인이 많아 개별 그래프만으로는 계정 흐름이 안 보이므로, 어제 지출이 있는
+    # 캠페인 전체를 날짜별로 합산한 계정 전체 추이를 맨 위에 둔다.
+    acc = df_camp.groupby("date").agg(
+        spend=("spend", "sum"), purchase_value=("purchase_value", "sum"),
+    ).reset_index()
+    if acc["spend"].sum() > 0:
+        acc["roas"] = (acc["purchase_value"] / acc["spend"]).where(acc["spend"] > 0, 0)
+        a_spend = acc["spend"].sum(); a_val = acc["purchase_value"].sum()
+        a_roas = a_val / a_spend if a_spend else 0
+        st.markdown(
+            f"**🏢 계정 전체 (활성 캠페인 {len(ACT_CAMP)}개 합산)**  ·  "
+            f"지출 ₩{a_spend:,.0f} · 매출 ₩{a_val:,.0f} · ROAS {a_roas:.2f}"
+        )
+        dual_axis_chart(acc, key="acc_total")
+        st.markdown("---")
+        st.caption("↓ 아래는 캠페인별 개별 성과")
+
     camp_only = (
         df_camp.groupby("campaign")["spend"].sum().sort_index().index.tolist()
     )
