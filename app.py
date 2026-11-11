@@ -503,6 +503,38 @@ def _short(name: str, n: int = 34) -> str:
 
 SORT_COL = {"지출": "spend", "ROAS": "roas", "CTR": "ctr"}
 
+# 썸네일 표시 상한(px). 원본이 64px인 영상 썸네일을 카드 전체폭으로 늘리면
+# 7배 확대라 뭉개진다 → 상한을 두어 확대율을 낮추고(≈3배) 체감 선명도를 높인다.
+# 512px 풀이미지는 이 값으로 '축소'되므로 오히려 더 또렷해진다.
+THUMB_MAX_PX = 200
+
+
+@st.cache_data
+def _img_b64(path: str, mtime: float) -> str:
+    """로컬 썸네일을 base64 data URI로. mtime을 인자로 받아 파일 변경 시 캐시 무효화."""
+    import base64
+    with open(path, "rb") as f:
+        return "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+
+
+def render_thumb(imgpath: str | None):
+    """썸네일을 상한 크기로 렌더(없으면 플레이스홀더). use_container_width 대신
+    max-width로 과확대를 막아 저해상 썸네일의 체감 화질을 높인다."""
+    if imgpath and os.path.exists(imgpath):
+        uri = _img_b64(imgpath, os.path.getmtime(imgpath))
+        st.markdown(
+            f"<img src='{uri}' style='width:100%;max-width:{THUMB_MAX_PX}px;"
+            "aspect-ratio:1;object-fit:cover;border-radius:8px;display:block'/>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f"<div style='width:100%;max-width:{THUMB_MAX_PX}px;aspect-ratio:1;"
+            "background:#f1f5f9;border-radius:8px;display:flex;align-items:center;"
+            "justify-content:center;font-size:2rem;color:#94a3b8'>🖼️</div>",
+            unsafe_allow_html=True,
+        )
+
 
 def render_cards(sec: pd.DataFrame, cmap: pd.DataFrame, key: str, ncol: int = 4):
     if sec.empty:
@@ -518,15 +550,7 @@ def render_cards(sec: pd.DataFrame, cmap: pd.DataFrame, key: str, ncol: int = 4)
                 info = cmap.loc[r.ad] if r.ad in cmap.index else None
                 imgrel = info["img"] if info is not None else None
                 imgpath = os.path.join(DATA_DIR, imgrel) if imgrel else None
-                if imgpath and os.path.exists(imgpath):
-                    st.image(imgpath, use_container_width=True)
-                else:
-                    st.markdown(
-                        "<div style='width:100%;aspect-ratio:1;background:#f1f5f9;"
-                        "border-radius:8px;display:flex;align-items:center;"
-                        "justify-content:center;font-size:2rem;color:#94a3b8'>🖼️</div>",
-                        unsafe_allow_html=True,
-                    )
+                render_thumb(imgpath)
                 is_video = bool(info["is_video"]) if info is not None else False
                 tag = "🎬 영상" if is_video else "🖼️ 이미지"
                 roas_color = "#16a34a" if r.roas >= 1 else ("#f59e0b" if r.roas >= 0.5 else "#dc2626")
